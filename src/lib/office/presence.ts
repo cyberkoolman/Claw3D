@@ -10,6 +10,17 @@ export type OfficeAgentPresence = {
   name: string;
   state: OfficeAgentState;
   preferredDeskId?: string;
+  activity?: string;
+  message?: string;
+  missionId?: string;
+  taskId?: string;
+  operationId?: string;
+  spanId?: string;
+  parentSpanId?: string;
+  acceptanceRound?: number;
+  durationMs?: number;
+  success?: boolean;
+  updatedAt?: string;
 };
 
 export type OfficePresenceSnapshot = {
@@ -46,6 +57,12 @@ const normalizeOfficeAgentState = (value: unknown): OfficeAgentState => {
   return "idle";
 };
 
+const optionalString = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+
+const optionalNumber = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
 export const normalizeOfficePresenceSnapshot = (
   value: unknown,
   fallbackWorkspaceId = "default"
@@ -77,12 +94,34 @@ export const normalizeOfficePresenceSnapshot = (
       typeof entry.preferredDeskId === "string" && entry.preferredDeskId.trim().length > 0
         ? entry.preferredDeskId.trim()
         : undefined;
+    const activity = optionalString(entry.activity);
+    const message = optionalString(entry.message);
+    const missionId = optionalString(entry.missionId);
+    const taskId = optionalString(entry.taskId);
+    const operationId = optionalString(entry.operationId);
+    const spanId = optionalString(entry.spanId);
+    const parentSpanId = optionalString(entry.parentSpanId);
+    const acceptanceRound = optionalNumber(entry.acceptanceRound);
+    const durationMs = optionalNumber(entry.durationMs);
+    const success = typeof entry.success === "boolean" ? entry.success : undefined;
+    const updatedAt = optionalString(entry.updatedAt);
     return [
       {
         agentId,
         name,
         state: normalizeOfficeAgentState(entry.state),
         ...(preferredDeskId ? { preferredDeskId } : {}),
+        ...(activity ? { activity } : {}),
+        ...(message ? { message } : {}),
+        ...(missionId ? { missionId } : {}),
+        ...(taskId ? { taskId } : {}),
+        ...(operationId ? { operationId } : {}),
+        ...(spanId ? { spanId } : {}),
+        ...(parentSpanId ? { parentSpanId } : {}),
+        ...(acceptanceRound !== undefined ? { acceptanceRound } : {}),
+        ...(durationMs !== undefined ? { durationMs } : {}),
+        ...(success !== undefined ? { success } : {}),
+        ...(updatedAt ? { updatedAt } : {}),
       },
     ];
   });

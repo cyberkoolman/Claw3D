@@ -593,12 +593,23 @@ const mapRemotePresenceAgentToOffice = (agent: {
   agentId: string;
   name: string;
   state: "idle" | "working" | "meeting" | "error";
+  activity?: string;
+  message?: string;
+  taskId?: string;
+  durationMs?: number;
+  success?: boolean;
 }): OfficeAgent => {
   const stableId = `remote:${agent.agentId}`;
   const isWorking = agent.state === "working" || agent.state === "meeting";
+  const rawActivityDetail = agent.message?.trim() || agent.activity?.trim() || "";
+  const activityDetail =
+    rawActivityDetail.length > 80
+      ? `${rawActivityDetail.slice(0, 77)}...`
+      : rawActivityDetail || null;
   return {
     id: stableId,
     name: agent.name || "Unknown",
+    subtitle: activityDetail,
     status: agent.state === "error" ? "error" : isWorking ? "working" : "idle",
     color: stringToColor(stableId),
     item: getDeterministicItem(stableId),
