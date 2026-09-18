@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { normalizeOfficePresenceSnapshot } from "@/lib/office/presence";
+import {
+  getOfficePresenceActivityText,
+  getOfficePresenceEventKey,
+} from "@/lib/office/presencePresentation";
 
 describe("normalizeOfficePresenceSnapshot", () => {
   it("retains rich correlated activity for remote agents", () => {
@@ -70,5 +74,29 @@ describe("normalizeOfficePresenceSnapshot", () => {
         state: "working",
       },
     ]);
+  });
+
+  it("prefers a rich message for remote speech bubbles", () => {
+    const agent = normalizeOfficePresenceSnapshot({
+      agents: [
+        {
+          agentId: "phoenix",
+          name: "Phoenix",
+          state: "working",
+          activity: "acceptance.completed",
+          message: "Mission verified in acceptance round 2.",
+          operationId: "mission-2",
+          updatedAt: "2026-09-18T01:10:00Z",
+        },
+      ],
+    }).agents[0];
+
+    expect(getOfficePresenceActivityText(agent)).toBe(
+      "Mission verified in acceptance round 2."
+    );
+    expect(getOfficePresenceEventKey(agent)).toContain("mission-2");
+    expect(getOfficePresenceEventKey(agent)).toContain(
+      "Mission verified in acceptance round 2."
+    );
   });
 });

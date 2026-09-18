@@ -205,6 +205,10 @@ import {
   buildOfficeDeskMonitor,
   type OfficeDeskMonitor,
 } from "@/lib/office/deskMonitor";
+import {
+  getOfficePresenceActivityText,
+  getOfficePresenceEventKey,
+} from "@/lib/office/presencePresentation";
 import { deriveSkillReadinessState } from "@/lib/skills/presentation";
 import type { StandupAgentSnapshot } from "@/lib/office/standup/types";
 import type { SkillStatusEntry } from "@/lib/skills/types";
@@ -1015,6 +1019,7 @@ export function OfficeScreen({
   const [clockTick, setClockTick] = useState(0);
   const [debugRows, setDebugRows] = useState<OfficeDebugRow[]>([]);
   const [feedEvents, setFeedEvents] = useState<OfficeFeedEvent[]>([]);
+  const remotePresenceEventKeyByAgentIdRef = useRef<Record<string, string>>({});
   const officeAgentCacheRef = useRef<
     Map<
       string,
@@ -1371,6 +1376,7 @@ export function OfficeScreen({
     sourceKind: remoteOfficeSourceKind,
     presenceUrl: remoteOfficePresenceUrl,
     gatewayUrl: remoteOfficeGatewayUrl,
+    pollIntervalMs: remoteOfficeSourceKind === "presence_endpoint" ? 2_000 : 5_000,
   });
   const { snapshot: remoteOfficeLayoutSnapshot } = useRemoteOfficeLayout({
     enabled: remoteOfficeEnabled,
@@ -2833,6 +2839,36 @@ export function OfficeScreen({
   }, [agentsLoaded, state.agents]);
 
   useEffect(() => {
+    const agents = remoteOfficeSnapshot?.agents ?? [];
+    const previousKeys = remotePresenceEventKeyByAgentIdRef.current;
+    const nextKeys: Record<string, string> = {};
+    const nextEvents: OfficeFeedEvent[] = [];
+
+    for (const agent of agents) {
+      const id = `remote:${agent.agentId}`;
+      const eventKey = getOfficePresenceEventKey(agent);
+      nextKeys[id] = eventKey;
+      if (!previousKeys[id] || previousKeys[id] === eventKey) continue;
+
+      const text = getOfficePresenceActivityText(agent);
+      if (!text) continue;
+      const parsedTimestamp = agent.updatedAt ? Date.parse(agent.updatedAt) : Number.NaN;
+      nextEvents.push({
+        id,
+        name: agent.name || agent.agentId,
+        text,
+        ts: Number.isFinite(parsedTimestamp) ? parsedTimestamp : Date.now(),
+        kind: "reply",
+      });
+    }
+
+    remotePresenceEventKeyByAgentIdRef.current = nextKeys;
+    if (nextEvents.length === 0) return;
+    nextEvents.sort((left, right) => right.ts - left.ts);
+    setFeedEvents((previous) => [...nextEvents, ...previous].slice(0, 12));
+  }, [remoteOfficeSnapshot]);
+
+  useEffect(() => {
     if (status !== "connected" || !agentsLoaded) return;
     const runtimeHandler = createGatewayRuntimeEventHandler({
       getStatus: () => status,
@@ -3134,14 +3170,22 @@ export function OfficeScreen({
     agents: state.agents,
   });
   const standupAgentSnapshots = useMemo<StandupAgentSnapshot[]>(
-    () =>
-      state.agents.map((agent) => ({
+    () => {
+      const remoteAgents = (remoteOfficeSnapshot?.agents ?? []).map((agent) => ({
+        agentId: `remote:${agent.agentId}`,
+        name: agent.name || agent.agentId,
+        latestPreview: getOfficePresenceActivityText(agent) || null,
+        lastUserMessage: null,
+      }));
+      if (remoteAgents.length > 0) return remoteAgents;
+      return state.agents.map((agent) => ({
         agentId: agent.agentId,
         name: agent.name || agent.agentId,
         latestPreview: agent.latestPreview,
         lastUserMessage: agent.lastUserMessage,
-      })),
-    [state.agents],
+      }));
+    },
+    [remoteOfficeSnapshot, state.agents],
   );
   const standupController = useOfficeStandupController({
     gatewayUrl,
